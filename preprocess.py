@@ -306,7 +306,8 @@ def data_process_hyper_base(args):
             shutil.copy(video, os.path.join(save_dir, video.split('/')[-2], video.split('/')[-1]))
 
     # 获取视频剪辑目录下所有子目录中的 .mp4 文件列表
-    filelist = glob(os.path.join(args.hyperlips_train_dataset, "video_clips", '*/*.mp4'))
+    # filelist = glob(os.path.join(args.hyperlips_train_dataset, "video_clips", '*/*.mp4'))
+    filelist = glob(os.path.join(args.hyperlips_train_dataset, "video_clips", '*/*/*.mp4'))
     filelist_new = []
 
     # 将文件路径中的反斜杠替换为正斜杠
@@ -395,7 +396,8 @@ def split_train_test_text(args):
         val_single = random.choice(list1)
         print(val_single)
         # 构建验证集图片的相对路径
-        val_single = os.path.join(val_single.split('/')[-2], val_single.split('/')[-1])
+        # val_single = os.path.join(val_single.split('/')[-2], val_single.split('/')[-1])
+        val_single = os.path.join(val_single.split('\\')[-2], val_single.split('\\')[-1])
         extor_list.append(val_single)
 
     # 分别打开训练集和验证集的文本文件进行写入
@@ -407,7 +409,8 @@ def split_train_test_text(args):
                 video_list2 = os.listdir(path2)
                 # 遍历每个视频的图片
                 for vilist2 in video_list2:
-                    item2 = item + '/' + vilist2
+                    # item2 = item + '/' + vilist2
+                    item2 = os.path.join(item, vilist2)
                     # 将图片的相对路径写入训练集或验证集文件
                     if item2 not in extor_list:
                         f.write(item2)
