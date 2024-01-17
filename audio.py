@@ -5,35 +5,35 @@ import numpy as np
 from scipy import signal
 from scipy.io import wavfile
 from hparams import hparams as hp
-
+# 从指定路径加载音频文件，返回音频信号的波形
 def load_wav(path, sr):
     return librosa.core.load(path, sr=sr)[0]
-
+# 将音频波形保存为WAV文件，进行了幅度缩放和整型转换
 def save_wav(wav, path, sr):
     wav *= 32767 / max(0.01, np.max(np.abs(wav)))
     #proposed by @dsmiller
     wavfile.write(path, sr, wav.astype(np.int16))
-
+# 同上，但浮点格式保存
 def save_wavenet_wav(wav, path, sr):
     librosa.output.write_wav(path, wav, sr=sr)
-
+# 对音频进行预加重
 def preemphasis(wav, k, preemphasize=True):
     if preemphasize:
         return signal.lfilter([1, -k], [1], wav)
     return wav
-
+# 对音频进行反预加重
 def inv_preemphasis(wav, k, inv_preemphasize=True):
     if inv_preemphasize:
         return signal.lfilter([1], [1, -k], wav)
     return wav
-
+# 获取帧移的大小
 def get_hop_size():
     hop_size = hp.hop_size
     if hop_size is None:
         assert hp.frame_shift_ms is not None
         hop_size = int(hp.frame_shift_ms / 1000 * hp.sample_rate)
     return hop_size
-
+# 计算音频的线性谱图
 def linearspectrogram(wav):
     D = _stft(preemphasis(wav, hp.preemphasis, hp.preemphasize))
     S = _amp_to_db(np.abs(D)) - hp.ref_level_db
@@ -41,7 +41,7 @@ def linearspectrogram(wav):
     if hp.signal_normalization:
         return _normalize(S)
     return S
-
+# 计算音频的梅尔谱图
 def melspectrogram(wav):
     D = _stft(preemphasis(wav, hp.preemphasis, hp.preemphasize))
     S = _amp_to_db(_linear_to_mel(np.abs(D))) - hp.ref_level_db
@@ -53,7 +53,7 @@ def melspectrogram(wav):
 def _lws_processor():
     import lws
     return lws.lws(hp.n_fft, get_hop_size(), fftsize=hp.win_size, mode="speech")
-
+# 计算音频的短时傅里叶变换（STFT）
 def _stft(y):
     if hp.use_lws:
         return _lws_processor(hp).stft(y).T
@@ -63,6 +63,7 @@ def _stft(y):
 
 ##########################################################
 #Those are only correct when using lws!!! (This was messing with Wavenet quality for a long time!)
+# 计算谱图的帧数
 def num_frames(length, fsize, fshift):
     """Compute number of time frames of spectrogram
     """
@@ -73,7 +74,7 @@ def num_frames(length, fsize, fshift):
         M = (length + pad * 2 - fsize) // fshift + 2
     return M
 
-
+# 计算谱图的左右填充
 def pad_lr(x, fsize, fshift):
     """Compute left and right padding
     """
@@ -83,32 +84,33 @@ def pad_lr(x, fsize, fshift):
     r = (M - 1) * fshift + fsize - T
     return pad, pad + r
 ##########################################################
-#Librosa correct padding
+# 使用 Librosa 规范的填充方式计算左右填充
 def librosa_pad_lr(x, fsize, fshift):
     return 0, (x.shape[0] // fshift + 1) * fshift - x.shape[0]
 
 # Conversions
 _mel_basis = None
-
+# 将线性谱图转换为梅尔谱图
 def _linear_to_mel(spectogram):
     global _mel_basis
     if _mel_basis is None:
         _mel_basis = _build_mel_basis()
     return np.dot(_mel_basis, spectogram)
-
+# 构建梅尔滤波器组
 def _build_mel_basis():
     assert hp.fmax <= hp.sample_rate // 2
     # return librosa.filters.mel(hp.sample_rate, hp.n_fft, n_mels=hp.num_mels,
     #                            fmin=hp.fmin, fmax=hp.fmax)
     return librosa.filters.mel(sr=hp.sample_rate, n_fft=hp.n_fft, n_mels=hp.num_mels,
                                fmin=hp.fmin, fmax=hp.fmax)
+# 将振幅谱转换为分贝谱
 def _amp_to_db(x):
     min_level = np.exp(hp.min_level_db / 20 * np.log(10))
     return 20 * np.log10(np.maximum(min_level, x))
-
+# 将分贝谱转换为振幅谱
 def _db_to_amp(x):
     return np.power(10.0, (x) * 0.05)
-
+# 归一化
 def _normalize(S):
     if hp.allow_clipping_in_normalization:
         if hp.symmetric_mels:
@@ -122,7 +124,7 @@ def _normalize(S):
         return (2 * hp.max_abs_value) * ((S - hp.min_level_db) / (-hp.min_level_db)) - hp.max_abs_value
     else:
         return hp.max_abs_value * ((S - hp.min_level_db) / (-hp.min_level_db))
-
+# 反归一化
 def _denormalize(D):
     if hp.allow_clipping_in_normalization:
         if hp.symmetric_mels:
