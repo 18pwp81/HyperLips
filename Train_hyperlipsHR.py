@@ -21,7 +21,9 @@ from hparams_HR import hparams, get_image_list
 
 parser = argparse.ArgumentParser(description='Code to train the Wav2Lip model WITH the visual quality discriminator')
 
+#数据集路径
 parser.add_argument("-hyperlips_trian_dataset", help="Root folder of the preprocessed LRS2 dataset", default='Train_data/HR_Train_Dateset')
+#权重
 parser.add_argument('--checkpoint_dir', help='Save checkpoints to this directory', default="checkpoints_hyperlips_HR", type=str)
 parser.add_argument('--batch_size', type=int, help='Batch size for hyperlips model(s)', default=28)
 parser.add_argument('--img_size', type=int, help='imgsize for hyperlips model(s)', default=128)
@@ -36,23 +38,22 @@ global_epoch = 0
 use_cuda = torch.cuda.is_available()
 print('use_cuda: {}'.format(use_cuda))
 
-syncnet_T = 5
-syncnet_mel_step_size = 16
+syncnet_T = 5  #它设置了一个与同步网络（SyncNet）相关的参数，指定了时间窗口的大小
+syncnet_mel_step_size = 16  #用于设置音频处理中的步长大小。它可能用于将音频数据切割成小块或帧。这个步长通常用于提取音频特征。
 
 
-
-
+#这个类用于处理和加载图像数据，准备这些数据以供模型训练使用。它还包括一些数据预处理和处理坐标信息的功能
 class Dataset(object):
     def __init__(self, split):
         gt_img_root = os.path.join(args.hyperlips_trian_dataset,'GT_IMG')
         self.gt_img      =  get_image_list(gt_img_root,split) 
 
-
-
-
+    #这个方法接受一个 frame 参数，通常是图像文件的路径，然后解析出帧的标识（通常是文件名中的数字部分）并返回一个整数
     def get_frame_id(self, frame):
         return int(basename(frame).split('.')[0])
 
+    #这个方法接受一个 start_frame 参数，通常是一个起始帧的路径。它用于获取一个时间窗口内的图像帧序列，时间窗口的大小由全局变量 syncnet_T 决定
+    #通过分析 start_frame 的帧标识来确定窗口内的图像帧，并构建一个包含这些帧文件路径的列表 window_fnames。
     def get_window(self, start_frame):
         start_id = self.get_frame_id(start_frame)
         vidname = dirname(start_frame)
@@ -65,6 +66,8 @@ class Dataset(object):
             window_fnames.append(frame)
         return window_fnames
 
+    #接受一个 window_fnames 参数，它是一个图像帧文件路径的列表。这些方法用于读取这些图像帧文件，并进行一些预处理操作。
+    #read_window 方法将图像帧的大小调整为 args.img_size，然后返回图像列表。
     def read_window(self, window_fnames):
         if window_fnames is None: return None
         window = []
@@ -81,7 +84,7 @@ class Dataset(object):
 
         return window
 
-
+    #read_window_base 方法将图像帧的大小调整为固定的 128x128，然后返回图像列表
     def read_window_base(self, window_fnames):
         if window_fnames is None: return None
         window = []
@@ -98,7 +101,8 @@ class Dataset(object):
 
         return window
 
-
+    # 接受一个window_fnames参数，用于读取图像帧文件并进行预处理，通常用于生成"sketch"（草图）图像
+    # 会根据全局变量args.img_size的值来确定不同的卷积核大小和图像大小，并对图像进行模糊处理和二值化处理
     def read_window_sketch(self, window_fnames):
         if window_fnames is None: return None
         window = []
@@ -151,6 +155,9 @@ class Dataset(object):
             window.append(img)
 
         return window
+
+    #接受一个 window_fnames 参数，用于读取图像帧文件并提取坐标信息。
+    #它会查找图像中像素值为255的坐标，并返回坐标的最大和最小值
     def read_coord(self,window_fnames):
         if window_fnames is None: return None
 
@@ -170,6 +177,7 @@ class Dataset(object):
             y_min =min(index[:,1])
             coords.append([x_min,x_max,y_min,y_max])
         return coords
+    #接受一个 window 参数，通常是一个图像帧列表。它对图像进行一些准备工作，包括将图像值缩放到0到1之间，并将通道维度移动到第一维
     def prepare_window(self, window):
         # 3 x T x H x W
         x = np.asarray(window) / 255.
@@ -178,8 +186,11 @@ class Dataset(object):
         return x
 
     def __len__(self):
-        return len(self.gt_img)
+        return len(self.gt_img)  #返回数据集中样本的数量，通常是 gt_img 列表的长度
 
+    #获取数据集中的样本。
+    # 它首先选择一个随机索引 idx，然后根据该索引构建图像和标签的路径。
+    # 接着，它调用上述方法来获取图像数据、sketch数据、mask数据等，并将它们返回
     def __getitem__(self, idx):
         while 1:
  
@@ -242,7 +253,9 @@ class Dataset(object):
             return gt_img, gt_sketch, gt_mask,hyper_img,hyper_sketch,coords
 
 
-
+#用于将模型的输入、生成的输出、真实目标以及可能的掩码图像保存为图像文件，以便进一步分析、可视化和评估模型的性能。
+# 函数会将这些图像按照时间步进行拼接，方便查看它们在时间轴上的对应关系。
+# 这通常在深度学习模型的训练和测试中用于监控模型的输出结果。
 def save_sample_images(x, g, gt,m, global_step, checkpoint_dir):
     x = (x.detach().cpu().numpy().transpose(0, 2, 3, 4, 1) * 255.).astype(np.uint8)
     g = (g.detach().cpu().numpy().transpose(0, 2, 3, 4, 1) * 255.).astype(np.uint8)
@@ -255,6 +268,9 @@ def save_sample_images(x, g, gt,m, global_step, checkpoint_dir):
         for t in range(len(c)):
             cv2.imwrite('{}/{}_{}.jpg'.format(folder, batch_idx, t), c[t])
 
+#使用VGG19网络来计算感知损失（Perceptual Loss）的PyTorch模型类。
+# 感知损失通常用于生成模型的训练，以帮助生成更具真实感的图像
+#利用预训练的VGG19模型来提取图像的特征表示，并使用L1损失来衡量生成图像与真实图像之间的感知差异
 class PerceptualLoss(nn.Module):
     def __init__(self):
         super(PerceptualLoss, self).__init__()
@@ -270,7 +286,8 @@ class PerceptualLoss(nn.Module):
         perception_loss = self.l1_loss(self.loss_network(high_resolution), self.loss_network(fake_high_resolution))
         return perception_loss   
 
-logloss = nn.BCELoss()
+logloss = nn.BCELoss()  #创建了一个二进制交叉熵损失的实例，通常用于二分类问题的训练。这个损失函数用于测量两个概率分布之间的相似度，常用于生成模型中的二进制分类任务
+#自定义的损失函数，用于计算余弦相似性损失（Cosine Similarity Loss）
 def cosine_loss(a, v, y):
     d = nn.functional.cosine_similarity(a, v)
     loss = logloss(d.unsqueeze(1), y)
@@ -279,10 +296,15 @@ def cosine_loss(a, v, y):
 
 device = torch.device("cuda" if use_cuda else "cpu")
 
-loss_fn_vgg = lpips.LPIPS(net='vgg').cuda()
-recon_loss = nn.L1Loss()
+loss_fn_vgg = lpips.LPIPS(net='vgg').cuda() #创建了一个LPIPS（Learned Perceptual Image Patch Similarity）损失函数的实例。LPIPS是一种感知损失函数，用于测量图像之间的感知相似性。在此情况下，使用VGG网络来计算感知相似性
+recon_loss = nn.L1Loss() #创建了一个L1损失函数的实例，用于计算两个输入之间的L1损失。通常在图像生成任务中使用，用于测量生成图像与目标图像之间的差异。
 
 
+
+#输入参数包括设备（device）、模型（model）、鉴别器、训练数据加载器
+#函数内部使用不同类型的损失函数，如对抗性损失、感知损失、内容损失、L1损失等。
+# 在每个训练步骤中，模型和鉴别器被训练，损失被计算和反向传播，优化器被更新。
+# 训练过程中，还会保存模型检查点和样本图像
 def train(device, model, disc,train_data_loader, test_data_loader, optimizer,disc_optimizer, checkpoint_dir=None, checkpoint_interval=None, nepochs=None):
     global global_step, global_epoch
     resumed_step = global_step
@@ -425,6 +447,10 @@ def train(device, model, disc,train_data_loader, test_data_loader, optimizer,dis
                                                                                         ))
         global_epoch += 1
 
+
+#该函数用于评估模型的性能。
+# 输入参数包括测试数据加载器（test_data_loader）、全局步数（global_step）、设备（device）和模型（model）。
+# 函数内部迭代测试数据加载器，计算模型的性能指标，如L1损失和同步损失，并返回性能评估结果。
 def eval_model(test_data_loader, global_step, device, model):
     eval_steps = 300
     print('Evaluating for {} steps'.format(eval_steps))
@@ -466,6 +492,10 @@ def eval_model(test_data_loader, global_step, device, model):
         return sum(running_sync_loss) / len(running_sync_loss)
 
 
+
+#该函数用于保存模型和优化器的检查点。
+# 输入参数包括模型（model）、优化器（optimizer）、当前步数（step）、检查点目录（checkpoint_dir）、当前周期（epoch）、可选的前缀（prefix）。
+# 函数内部将模型的状态字典、优化器的状态字典（如果 hparams.save_optimizer_state 为真）、当前步数和周期信息保存到指定路径的检查点文件中。
 def save_checkpoint(model, optimizer, step, checkpoint_dir, epoch, prefix=''):
     checkpoint_path = join(
         checkpoint_dir, "{}checkpoint_step{:09d}.pth".format(prefix, global_step))
@@ -478,6 +508,10 @@ def save_checkpoint(model, optimizer, step, checkpoint_dir, epoch, prefix=''):
     }, checkpoint_path)
     print("Saved checkpoint:", checkpoint_path)
 
+
+# 这是一个内部函数，用于加载检查点文件。
+# 输入参数是检查点文件的路径（checkpoint_path）。
+# 函数内部使用 PyTorch 的 torch.load 函数来加载检查点文件，并返回一个包含模型状态、优化器状态以及其他信息的字典
 def _load(checkpoint_path):
     if use_cuda:
         checkpoint = torch.load(checkpoint_path)
@@ -486,7 +520,10 @@ def _load(checkpoint_path):
                                 map_location=lambda storage, loc: storage)
     return checkpoint
 
-
+# 该函数用于加载模型检查点。
+# 输入参数包括检查点文件路径（path）、模型（model）、是否重置优化器（reset_optimizer，默认为 False）和是否覆盖全局状态（overwrite_global_states，默认为 True）。
+# 函数内部调用 _load 函数来加载检查点文件，然后将模型的状态字典加载到模型中，如果需要，还可以加载优化器状态、更新全局步数和周期信息。
+# 返回加载后的模型。
 def load_checkpoint(path, model, reset_optimizer=False, overwrite_global_states=True):
     global global_step
     global global_epoch
@@ -505,14 +542,16 @@ def load_checkpoint(path, model, reset_optimizer=False, overwrite_global_states=
 
     return model
 
-
 if __name__ == "__main__":
+    # 指定检查点目录
     checkpoint_dir = args.checkpoint_dir
 
-    # Dataset and Dataloader setup
+    # 数据集和数据加载器的设置
+    # 创建训练数据集和验证数据集
     train_dataset = Dataset('train')
     test_dataset = Dataset('val')
 
+    # 创建训练和验证数据加载器
     train_data_loader = data_utils.DataLoader(
         train_dataset, batch_size=args.batch_size, shuffle=True,
         num_workers=hparams.num_workers)
@@ -521,56 +560,58 @@ if __name__ == "__main__":
         test_dataset, batch_size=args.batch_size,
         num_workers=4)
 
+    # 指定设备（CPU 或 GPU）
     device = torch.device("cuda" if use_cuda else "cpu")
 
-    
-    if args.img_size==512:
+    # 根据图像大小设置 rescaling 值
+    if args.img_size == 512:
         rescaling = 4
-    elif args.img_size==256:
-        
+    elif args.img_size == 256:
         rescaling = 2
     else:
         rescaling = 1
+
+    # 创建 HRDecoder 模型
     model = HRDecoder(rescaling)
     if torch.cuda.device_count() > 1:
-                print("Let's use", torch.cuda.device_count(), "GPUs!")
-                model = nn.DataParallel(model)
+        print("Let's use", torch.cuda.device_count(), "GPUs!")
+        model = nn.DataParallel(model)
     model = model.to(device)
 
+    # 创建 HRDecoder_disc_qual 判别器
     disc = HRDecoder_disc_qual()
     if torch.cuda.device_count() > 1:
-                print("Let's use", torch.cuda.device_count(), "GPUs!")
-                disc = nn.DataParallel(disc)
+        print("Let's use", torch.cuda.device_count(), "GPUs!")
+        disc = nn.DataParallel(disc)
     disc = disc.to(device)
 
+    # 打印可训练参数数量
+    print('total trainable params {}'.format(
+        sum(p.numel() for p in model.parameters() if p.requires_grad)))
+    print('total DISC trainable params {}'.format(
+        sum(p.numel() for p in disc.parameters() if p.requires_grad)))
 
-
-
-    print('total trainable params {}'.format(sum(p.numel() for p in model.parameters() if p.requires_grad)))
-    print('total DISC trainable params {}'.format(sum(p.numel() for p in disc.parameters() if p.requires_grad)))
-
+    # 创建判别器的优化器
     disc_optimizer = optim.Adam([p for p in disc.parameters() if p.requires_grad],
-                           lr=hparams.disc_initial_learning_rate, betas=(0.5, 0.999))
+                                lr=hparams.disc_initial_learning_rate, betas=(0.5, 0.999))
 
+    # 如果提供了模型的检查点路径，加载模型的权重
     if args.checkpoint_path is not None:
         load_checkpoint(args.checkpoint_path, model, reset_optimizer=False)
 
+    # 如果提供了判别器的检查点路径，加载判别器的权重
     if args.disc_checkpoint_path is not None:
         load_checkpoint(args.disc_checkpoint_path, disc, reset_optimizer=False, overwrite_global_states=False)
-        
 
-
+    # 创建模型的优化器
     optimizer = optim.Adam([p for p in model.parameters() if p.requires_grad],
                            lr=hparams.initial_learning_rate, betas=(0.5, 0.999))
 
-    disc_optimizer = optim.Adam([p for p in disc.parameters() if p.requires_grad],
-                           lr=hparams.disc_initial_learning_rate, betas=(0.5, 0.999))
-
-
+    # 如果指定的检查点目录不存在，创建该目录
     if not os.path.exists(checkpoint_dir):
         os.mkdir(checkpoint_dir)
 
-    # Train!
-    train(device, model,disc, train_data_loader, test_data_loader, optimizer,disc_optimizer, checkpoint_dir=checkpoint_dir,
-              checkpoint_interval=hparams.checkpoint_interval,
-              nepochs=hparams.nepochs)
+    # 开始训练
+    train(device, model, disc, train_data_loader, test_data_loader, optimizer, disc_optimizer, checkpoint_dir=checkpoint_dir,
+          checkpoint_interval=hparams.checkpoint_interval,
+          nepochs=hparams.nepochs)
