@@ -196,7 +196,8 @@ class Hyperlips():
             for j in video_name_list:
                 face = j
                 audiopath = j
-                outfile = os.path.join(out_dirname_path,face.split('/')[-1])
+                # outfile = os.path.join(out_dirname_path,face.split('/')[-1])
+                outfile = os.path.join(out_dirname_path, face.split('\\')[-1])
                 rest_root_path = "temp/rest"
                 temp_save_path ="temp/temp"
                 os.makedirs(rest_root_path, exist_ok=True)
