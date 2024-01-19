@@ -13,7 +13,7 @@ from torch.utils import data as data_utils
 import numpy as np
 from glob import glob
 import os, random, cv2, argparse
-os.environ["CUDA_VISIBLE_DEVICES"] = '1'
+os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 from hparams_Base import hparams, get_image_list
 
 parser = argparse.ArgumentParser(description='Code to train the Hyperbase model WITH the visual quality discriminator')
@@ -398,11 +398,11 @@ if __name__ == "__main__":
 
     train_data_loader = data_utils.DataLoader(
         train_dataset, batch_size=hparams.batch_size, shuffle=True,
-        num_workers=hparams.num_workers)
+        num_workers=0)  # num_workers=hparams.num_workers
 
     test_data_loader = data_utils.DataLoader(
         test_dataset, batch_size=hparams.batch_size,
-        num_workers=4)
+        num_workers=0)  # num_workers=4
 
     device = torch.device("cuda" if use_cuda else "cpu")
 
