@@ -195,7 +195,8 @@ class Dataset(object):
         while 1:
  
             idx = random.randint(0, len(self.gt_img) - 1)
-            vidname = os.path.join(self.gt_img[idx].split('/')[-2],self.gt_img[idx].split('/')[-1])
+            # vidname = os.path.join(self.gt_img[idx].split('/')[-2],self.gt_img[idx].split('/')[-1])       # 在此处有修改
+            vidname = os.path.join(self.gt_img[idx].split('\\')[-2], self.gt_img[idx].split('\\')[-1])
             gt_img_root = os.path.join(args.hyperlips_trian_dataset,'GT_IMG')
             gt_sketch_data_root = os.path.join(args.hyperlips_trian_dataset,'GT_SKETCH')
             gt_mask_root = os.path.join(args.hyperlips_trian_dataset,'GT_MASK')
@@ -212,7 +213,8 @@ class Dataset(object):
             if len(gt_img_names) <= 3 * syncnet_T:
                 continue
             
-            img_name = random.choice(gt_img_names).split('/')[-1]
+            # img_name = random.choice(gt_img_names).split('/')[-1]     # 这一行有修改
+            img_name = random.choice(gt_img_names).split('\\')[-1]
             gt_img_name        = join(gt_img_root,vidname,img_name)
             gt_sketch_name     = join(gt_sketch_data_root,vidname,img_name)
             gt_mask_name       = join(gt_mask_root,vidname,img_name)
@@ -320,6 +322,7 @@ def train(device, model, disc,train_data_loader, test_data_loader, optimizer,dis
         running_con_loss, running_mse_loss = 0., 0.
         prog_bar = tqdm(enumerate(train_data_loader))
         for step, (gt_img, gt_sketch, gt_mask,hyper_img,hyper_sketch,coords) in prog_bar:
+            # print('enter')
             disc.train()
             model.train()
             hyper_img = hyper_img.to(device)
@@ -554,11 +557,11 @@ if __name__ == "__main__":
     # 创建训练和验证数据加载器
     train_data_loader = data_utils.DataLoader(
         train_dataset, batch_size=args.batch_size, shuffle=True,
-        num_workers=hparams.num_workers)
+        num_workers=1)  # num_workers=hparams.num_workers
 
     test_data_loader = data_utils.DataLoader(
         test_dataset, batch_size=args.batch_size,
-        num_workers=4)
+        num_workers=0)  # num_workers=4
 
     # 指定设备（CPU 或 GPU）
     device = torch.device("cuda" if use_cuda else "cpu")
