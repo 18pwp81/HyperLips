@@ -14,7 +14,9 @@ import numpy as np
 from glob import glob
 import os, random, cv2, argparse
 
+
 # 设置了 CUDA 的环境变量，指定使用哪个 GPU
+
 os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 from hparams_Base import hparams, get_image_list
 
@@ -506,12 +508,12 @@ if __name__ == "__main__":
     # 创建训练数据加载器
     train_data_loader = data_utils.DataLoader(
         train_dataset, batch_size=hparams.batch_size, shuffle=True,
-        num_workers=hparams.num_workers)
+        num_workers=0)  # num_workers=hparams.num_workers
 
     # 创建测试数据加载器
     test_data_loader = data_utils.DataLoader(
         test_dataset, batch_size=hparams.batch_size,
-        num_workers=4)
+        num_workers=0)  # num_workers=4
 
     # 环境和模型初始化阶段
 
