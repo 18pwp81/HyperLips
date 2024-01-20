@@ -15,7 +15,7 @@ from glob import glob
 import os, random, cv2, argparse
 
 # 设置了 CUDA 的环境变量，指定使用哪个 GPU
-os.environ["CUDA_VISIBLE_DEVICES"] = '1'
+os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 from hparams_Base import hparams, get_image_list
 
 # 使用 argparse 解析命令行参数
